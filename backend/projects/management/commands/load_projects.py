@@ -21,31 +21,32 @@ class Command(BaseCommand):
         self.load_projects_from_folder(project_folder_path)
 
     def load_projects_from_folder(self, folder_path):
-        for year_folder in os.listdir(folder_path):
-            year_path = os.path.join(folder_path, year_folder)
-            if os.path.isdir(year_path):
-                for month_folder in os.listdir(year_path):
-                    month_path = os.path.join(year_path, month_folder)
-                    if os.path.isdir(month_path):
-                        for project_folder in os.listdir(month_path):
-                            project_path = os.path.join(month_path, project_folder)
-                            if os.path.isdir(project_path):
-                                # Find the project.flp file dynamically based on the project folder
-                                flp_file_path = self.find_flp_file(project_path)
+        for root, dirs, files in os.walk(folder_path):
+            # Exclude backup folders from the scanning process
+            dirs[:] = [d for d in dirs if not d.startswith('Backup')]
 
-                                if flp_file_path:
-                                    # Extract relevant information from the project file and create a Project instance
-                                    project_name = project_folder
-                                    project = Project.objects.create(
-                                        name=project_name,
-                                        project_file=flp_file_path,
-                                        created_on = pyflp.parse(flp_file_path).created_on,
-                                    )
+            for file in files:
+                if file.endswith('.flp'):
+                    project_path = os.path.join(root, file)
 
-                                    # Display a message for each project loaded
-                                    self.stdout.write(self.style.SUCCESS(f'Successfully loaded project: {project_name}'))
-                                else:
-                                    self.stdout.write(self.style.WARNING(f'Project file not found for folder: {project_folder}'))
+                    # Check if the project is already in the database
+                    if not Project.objects.filter(path=project_path).exists():
+                        project = pyflp.parse(project_path)
+
+                        # Create a new project entry in the database
+                        Project.objects.create(
+                            name=os.path.splitext(file)[0],
+                            created_on = project.created_on,
+                            path = project_path,
+                            artists = project.artists,
+                            comments = project.comments,
+                            genre = project.genre,
+                            time_spent = project.time_spent
+                        )
+
+                        self.stdout.write(self.style.SUCCESS(f'Successfully added project: {project_path}'))
+                    else:
+                        self.stdout.write(self.style.WARNING(f'Project already exists: {project_path}'))
 
     def find_flp_file(self, project_path):
         # Dynamically find the project.flp file based on the project folder
