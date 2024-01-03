@@ -8,3 +8,5 @@ venv
 migrations/
 flps
 .DS_Store
+node_modules/
+/build
